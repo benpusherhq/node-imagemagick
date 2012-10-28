@@ -97,39 +97,70 @@ function exec2(file, args /*, options, callback */) {
   return child;
 };
 
-
+/*
+    identify returns the properties via a nested tree of 
+    key-value pairs, each delmited by the ":" character.
+ */
 function parseIdentify(input) {
+
   var lines = input.split("\n"),
       prop = {},
       props = [prop],
       prevIndent = 0,
-      indents = [indent],
-      currentLine, comps, indent, i;
+      indents = [],
+      currentLine;
 
-  lines.shift(); //drop first line (Image: name.jpg)
-
-  for (i in lines) {
+  lines.shift(); //drop first line (Image: name.jpg)  
+  prevIndent = lines[0].search(/\S/);
+  indents.push(prevIndent);
+  
+  var length = lines.length;
+  for (var i = 0; i < length; ++i) {
     currentLine = lines[i];
-    indent = currentLine.search(/\S/);
-    if (indent >= 0) {
-      comps = currentLine.split(': ');
+    
+    // Ignore blank and whitespace-only lines
+    var indent = currentLine.search(/\S/);      
+    if (indent >= 0)
+    {
+      var components = currentLine.split(': ');
+        
       if (indent > prevIndent) indents.push(indent);
-      while (indent < prevIndent && props.length) {
-        indents.pop();
+        
+      // Copy the accumulated properties at the inner indent level
+      // to the parent.
+      while (indent < prevIndent) {
+        indents.pop();        
         prop = props.pop();
         prevIndent = indents[indents.length - 1];
       }
-      if (comps.length < 2) {
-        props.push(prop);
-        prop = prop[currentLine.split(':')[0].trim().toLowerCase()] = {};
-      } else {
-        prop[comps[0].trim().toLowerCase()] = comps[1].trim()
+        
+      // Images can sometimes generate empty values.  Check if a colon
+      // followed by no value indicates a blank value or a new level of
+      // nesting.
+      var beginNesting = false;
+      if (lines[i + 1] !== undefined) {
+        var nextIndent = lines[i + 1].search(/\S/);
+        beginNesting = (nextIndent > indent);
       }
-      prevIndent = indent;
-    }
+        
+      var propName = components[0].trim().replace(/\s*:$/, "").toLowerCase();
+      if (beginNesting) {
+        prop[propName] = {};
+        props.push(prop);
+        prop = prop[propName];
+      } else {
+        var value = (components.length > 1) ? components[1].trim() : null;
+        prop[propName] = value;
+      }
+        
+      prevIndent = indent;      
+    }    
   }
-  return prop;
+  
+  // Return the root of the property tree
+  return props[0];
 };
+
 
 exports.identify = function(pathOrArgs, callback) {
   var isCustom = Array.isArray(pathOrArgs),
