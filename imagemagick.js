@@ -161,6 +161,36 @@ function parseIdentify(input) {
   return props[0];
 };
 
+/*
+    Faster alternative to just grab the width, height, and date on an image buffer.
+
+    The current implentation of identify invokes the "-verbose" flag if you pass
+    a data buffer.  That causes ImageMagick to do full image analysis -- a slow 
+    operation on large images.
+ */  
+exports._identifyQuick = function(buffer, callback)     
+{
+  var args = [ "-format", "%w|%h|%[exif:dateTimeOriginal]",  "-" ];
+
+  var proc = exec2(exports.identify.path, args, {timeout:120000}, function(err, stdout, stderr) {
+    var result, geometry;
+    if (!err)
+    {
+        var p = stdout.split("|");
+        result = 
+        {
+            width  : parseInt(p[0]),
+            height : parseInt(p[1]),
+            date   : p[2]
+        };
+    }
+    callback(err, result);
+  });      
+  proc.stdin.end(buffer);
+  
+  return proc;
+};
+
 
 exports.identify = function(pathOrArgs, callback) {
   var isCustom = Array.isArray(pathOrArgs),
